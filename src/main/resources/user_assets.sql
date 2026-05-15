@@ -1,0 +1,3 @@
+ALTER TABLE `sys_user`
+ADD COLUMN `balance` DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '账户余额' AFTER `email`,
+ADD COLUMN `points` INT NOT NULL DEFAULT 0 COMMENT '潮玩积分' AFTER `balance`;

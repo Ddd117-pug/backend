@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.toyshop.product.mapper.BrandMapper">
+
+    <resultMap id="BrandResultMap" type="com.toyshop.product.entity.Brand">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="logo" column="logo"/>
+        <result property="description" column="description"/>
+        <result property="productCount" column="product_count"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="selectAllEnabled" resultMap="BrandResultMap">
+        SELECT id, name, logo, description, 0 AS product_count, sort_order, status, created_at, updated_at
+        FROM brand
+        WHERE status = 1
+        ORDER BY sort_order DESC, id ASC
+    </select>
+
+    <select id="selectAllWithProductCount" resultMap="BrandResultMap">
+        SELECT
+            b.id,
+            b.name,
+            b.logo,
+            b.description,
+            COUNT(p.id) AS product_count,
+            b.sort_order,
+            b.status,
+            b.created_at,
+            b.updated_at
+        FROM brand b
+        LEFT JOIN product p ON p.brand_id = b.id AND p.status = 1
+        WHERE b.status = 1
+        GROUP BY b.id, b.name, b.logo, b.description, b.sort_order, b.status, b.created_at, b.updated_at
+        ORDER BY b.sort_order DESC, b.id ASC
+    </select>
+
+    <select id="selectAllWithProductCountAndRecent" resultMap="BrandResultMap">
+        SELECT
+            b.id,
+            b.name,
+            b.logo,
+            b.description,
+            COUNT(p.id) AS product_count,
+            b.sort_order,
+            b.status,
+            b.created_at,
+            b.updated_at
+        FROM brand b
+        LEFT JOIN product p ON p.brand_id = b.id AND p.status = 1
+        WHERE b.status = 1
+        GROUP BY b.id, b.name, b.logo, b.description, b.sort_order, b.status, b.created_at, b.updated_at
+        ORDER BY product_count DESC, b.sort_order DESC, b.id DESC
+    </select>
+
+    <select id="selectByIdWithProductCount" resultMap="BrandResultMap">
+        SELECT
+            b.id,
+            b.name,
+            b.logo,
+            b.description,
+            COUNT(p.id) AS product_count,
+            b.sort_order,
+            b.status,
+            b.created_at,
+            b.updated_at
+        FROM brand b
+        LEFT JOIN product p ON p.brand_id = b.id AND p.status = 1
+        WHERE b.id = #{id}
+        GROUP BY b.id, b.name, b.logo, b.description, b.sort_order, b.status, b.created_at, b.updated_at
+        LIMIT 1
+    </select>
+</mapper>
