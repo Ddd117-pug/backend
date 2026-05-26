@@ -1,6 +1,7 @@
 package com.toyshop.aftersale.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.toyshop.aftersale.entity.AfterSaleOrder;
 import com.toyshop.aftersale.mapper.AfterSaleOrderMapper;
 import com.toyshop.aftersale.service.AfterSaleService;
@@ -9,6 +10,7 @@ import com.toyshop.common.response.ResultCode;
 import com.toyshop.order.entity.ToyOrder;
 import com.toyshop.order.mapper.ToyOrderMapper;
 import com.toyshop.order.service.OrderService;
+import com.toyshop.product.dto.PageResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -73,6 +75,19 @@ public class AfterSaleServiceImpl implements AfterSaleService {
     }
 
     @Override
+    public PageResponse<AfterSaleOrder> adminPage(Integer pageNum, Integer pageSize, Integer status, Long userId, String orderNo) {
+        long current = pageNum == null || pageNum < 1 ? 1L : pageNum;
+        long size = pageSize == null || pageSize < 1 ? 10L : pageSize;
+        QueryWrapper<AfterSaleOrder> qw = new QueryWrapper<>();
+        if (status != null) qw.eq("status", status);
+        if (userId != null) qw.eq("user_id", userId);
+        if (StringUtils.hasText(orderNo)) qw.like("order_no", orderNo);
+        qw.orderByDesc("created_at");
+        Page<AfterSaleOrder> page = afterSaleOrderMapper.selectPage(new Page<>(current, size), qw);
+        return new PageResponse<>(current, size, page.getTotal(), page.getRecords());
+    }
+
+    @Override
     public List<AfterSaleOrder> adminList() {
         return afterSaleOrderMapper.selectList(new QueryWrapper<AfterSaleOrder>()
                 .orderByDesc("created_at"));
@@ -91,7 +106,7 @@ public class AfterSaleServiceImpl implements AfterSaleService {
         record.setUpdatedAt(LocalDateTime.now());
         afterSaleOrderMapper.updateById(record);
 
-        orderService.refund(record.getUserId(), record.getOrderId());
+        orderService.refund(record.getOrderId());
 
         record.setStatus(STATUS_REFUNDED);
         record.setRefundedAt(LocalDateTime.now());

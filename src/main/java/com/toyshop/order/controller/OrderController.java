@@ -3,10 +3,12 @@ package com.toyshop.order.controller;
 import com.toyshop.common.exception.BusinessException;
 import com.toyshop.common.response.ApiResponse;
 import com.toyshop.common.response.ResultCode;
+import com.toyshop.order.dto.AfterSaleRequest;
 import com.toyshop.order.dto.CreateOrderRequest;
 import com.toyshop.order.dto.OrderDetailResponse;
 import com.toyshop.order.dto.OrderPageResponse;
 import com.toyshop.order.dto.PayOrderRequest;
+import com.toyshop.order.entity.ToyAfterSale;
 import com.toyshop.order.service.OrderService;
 import com.toyshop.security.JwtUser;
 import org.springframework.security.core.Authentication;
@@ -86,11 +88,35 @@ public class OrderController {
         return ApiResponse.success();
     }
 
-    @PostMapping("/{orderId}/refund")
-    public ApiResponse<Void> refund(Authentication authentication, @PathVariable Long orderId) {
+    @PostMapping("/{orderId}/after-sale")
+    public ApiResponse<Void> applyAfterSale(Authentication authentication,
+                                            @PathVariable Long orderId,
+                                            @Valid @RequestBody AfterSaleRequest request) {
         Long userId = ((JwtUser) authentication.getPrincipal()).getUserId();
-        orderService.refund(userId, orderId);
+        orderService.applyAfterSale(userId, orderId, request);
         return ApiResponse.success();
+    }
+
+    @PostMapping("/after-sale/{afterSaleId}/approve")
+    public ApiResponse<Void> approveAfterSale(Authentication authentication, @PathVariable Long afterSaleId) {
+        requireAdmin(authentication);
+        orderService.approveAfterSale(afterSaleId);
+        return ApiResponse.success();
+    }
+
+    @PostMapping("/after-sale/{afterSaleId}/reject")
+    public ApiResponse<Void> rejectAfterSale(Authentication authentication,
+                                             @PathVariable Long afterSaleId,
+                                             @RequestParam(required = false) String reply) {
+        requireAdmin(authentication);
+        orderService.rejectAfterSale(afterSaleId, reply);
+        return ApiResponse.success();
+    }
+
+    @GetMapping("/after-sale/my")
+    public ApiResponse<java.util.List<ToyAfterSale>> myAfterSales(Authentication authentication) {
+        Long userId = ((JwtUser) authentication.getPrincipal()).getUserId();
+        return ApiResponse.success(orderService.myAfterSales(userId));
     }
 
     private void requireAdmin(Authentication authentication) {

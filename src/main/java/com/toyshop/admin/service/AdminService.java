@@ -41,7 +41,6 @@ public interface AdminService {
     OrderDetailResponse orderDetail(Long orderId);
     void shipOrder(Long orderId);
     void cancelOrder(Long orderId);
-    void refundOrder(Long orderId);
     List<AdminAfterSaleRow> afterSaleList();
     void approveAfterSale(Long afterSaleId, String reply);
     void rejectAfterSale(Long afterSaleId, String reply);

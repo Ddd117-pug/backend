@@ -9,7 +9,9 @@ import com.toyshop.common.exception.BusinessException;
 import com.toyshop.common.response.ApiResponse;
 import com.toyshop.common.response.ResultCode;
 import com.toyshop.order.dto.OrderDetailResponse;
+import com.toyshop.order.entity.ToyAfterSale;
 import com.toyshop.order.entity.ToyOrder;
+import com.toyshop.order.service.OrderService;
 import com.toyshop.product.dto.PageResponse;
 import com.toyshop.product.entity.Brand;
 import com.toyshop.product.entity.Category;
@@ -29,10 +31,12 @@ import java.util.List;
 public class AdminController {
     private final AdminService adminService;
     private final ReviewService reviewService;
+    private final OrderService orderService;
 
-    public AdminController(AdminService adminService, ReviewService reviewService) {
+    public AdminController(AdminService adminService, ReviewService reviewService, OrderService orderService) {
         this.adminService = adminService;
         this.reviewService = reviewService;
+        this.orderService = orderService;
     }
 
     @GetMapping("/health")
@@ -187,17 +191,15 @@ public class AdminController {
         return ApiResponse.success();
     }
 
-    @PostMapping("/orders/{orderId}/refund")
-    public ApiResponse<Void> refundOrder(Authentication a, @PathVariable Long orderId) {
-        requireAdmin(a);
-        adminService.refundOrder(orderId);
-        return ApiResponse.success();
-    }
-
     @GetMapping("/after-sale")
-    public ApiResponse<List<AdminAfterSaleRow>> afterSaleList(Authentication a) {
+    public ApiResponse<com.toyshop.product.dto.PageResponse<ToyAfterSale>> afterSaleList(Authentication a,
+                                                                                           @RequestParam(required = false) Integer pageNum,
+                                                                                           @RequestParam(required = false) Integer pageSize,
+                                                                                           @RequestParam(required = false) Integer status,
+                                                                                           @RequestParam(required = false) Long userId,
+                                                                                           @RequestParam(required = false) String orderNo) {
         requireAdmin(a);
-        return ApiResponse.success(adminService.afterSaleList());
+        return ApiResponse.success(orderService.afterSalePage(pageNum, pageSize, status, userId, orderNo));
     }
 
     @PostMapping("/after-sale/{afterSaleId}/approve")

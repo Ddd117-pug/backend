@@ -8,11 +8,14 @@ import com.toyshop.cart.entity.CartItem;
 import com.toyshop.cart.mapper.CartItemMapper;
 import com.toyshop.common.exception.BusinessException;
 import com.toyshop.common.response.ResultCode;
+import com.toyshop.order.dto.AfterSaleRequest;
 import com.toyshop.order.dto.CreateOrderRequest;
 import com.toyshop.order.dto.OrderDetailResponse;
 import com.toyshop.order.dto.OrderPageResponse;
+import com.toyshop.order.entity.ToyAfterSale;
 import com.toyshop.order.entity.ToyOrder;
 import com.toyshop.order.entity.ToyOrderItem;
+import com.toyshop.order.mapper.ToyAfterSaleMapper;
 import com.toyshop.order.mapper.ToyOrderItemMapper;
 import com.toyshop.order.mapper.ToyOrderMapper;
 import com.toyshop.order.service.OrderService;
@@ -38,12 +41,19 @@ public class OrderServiceImpl implements OrderService {
     private static final int STATUS_SHIPPED = 2;
     private static final int STATUS_FINISHED = 3;
     private static final int STATUS_CANCELLED = 4;
+    private static final int STATUS_AFTER_SALE = 5;
+    private static final int STATUS_REFUNDED = 6;
     private static final int PAY_TYPE_BALANCE = 0;
     private static final int PAY_TYPE_WECHAT = 1;
     private static final int PAY_TYPE_ALIPAY = 2;
+    private static final int AFTER_SALE_PENDING = 0;
+    private static final int AFTER_SALE_APPROVED = 1;
+    private static final int AFTER_SALE_REJECTED = 2;
+    private static final int AFTER_SALE_REFUNDED = 3;
 
     private final ToyOrderMapper toyOrderMapper;
     private final ToyOrderItemMapper toyOrderItemMapper;
+    private final ToyAfterSaleMapper toyAfterSaleMapper;
     private final CartItemMapper cartItemMapper;
     private final ProductMapper productMapper;
     private final SysUserMapper sysUserMapper;
@@ -51,12 +61,14 @@ public class OrderServiceImpl implements OrderService {
 
     public OrderServiceImpl(ToyOrderMapper toyOrderMapper,
                             ToyOrderItemMapper toyOrderItemMapper,
+                            ToyAfterSaleMapper toyAfterSaleMapper,
                             CartItemMapper cartItemMapper,
                             ProductMapper productMapper,
                             SysUserMapper sysUserMapper,
                             UserAddressService userAddressService) {
         this.toyOrderMapper = toyOrderMapper;
         this.toyOrderItemMapper = toyOrderItemMapper;
+        this.toyAfterSaleMapper = toyAfterSaleMapper;
         this.cartItemMapper = cartItemMapper;
         this.productMapper = productMapper;
         this.sysUserMapper = sysUserMapper;
@@ -226,10 +238,97 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void refund(Long userId, Long orderId) {
+    public void applyAfterSale(Long userId, Long orderId, AfterSaleRequest request) {
         ToyOrder order = mustOwnOrder(userId, orderId);
-        refund(orderId);
+        if (order.getStatus() == null || (order.getStatus() != STATUS_PAID && order.getStatus() != STATUS_SHIPPED && order.getStatus() != STATUS_FINISHED)) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "仅已支付、已发货或已完成订单可申请售后");
+        }
+        ToyAfterSale exists = toyAfterSaleMapper.selectOne(new QueryWrapper<ToyAfterSale>().eq("order_id", orderId).eq("status", AFTER_SALE_PENDING));
+        if (exists != null) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "该订单已有待审核售后申请");
+        }
+        ToyAfterSale afterSale = new ToyAfterSale();
+        afterSale.setOrderId(orderId);
+        afterSale.setUserId(userId);
+        afterSale.setOrderNo(order.getOrderNo());
+        afterSale.setStatus(AFTER_SALE_PENDING);
+        afterSale.setReason(request.getReason().trim());
+        afterSale.setCreatedAt(LocalDateTime.now());
+        toyAfterSaleMapper.insert(afterSale);
+
+        order.setStatus(STATUS_AFTER_SALE);
         order.setUpdatedAt(LocalDateTime.now());
+        toyOrderMapper.updateById(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void approveAfterSale(Long afterSaleId) {
+        ToyAfterSale afterSale = toyAfterSaleMapper.selectById(afterSaleId);
+        if (afterSale == null) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后记录不存在");
+        }
+        if (!AFTER_SALE_PENDING_EQUALS(afterSale.getStatus())) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "当前售后状态不可审核");
+        }
+        ToyOrder order = toyOrderMapper.selectById(afterSale.getOrderId());
+        if (order == null) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单不存在");
+        }
+        rollbackStockAndSaleCount(order.getId());
+        SysUser user = mustActiveUser(order.getUserId());
+        user.setBalance(defaultAmount(user.getBalance()).add(defaultAmount(order.getTotalAmount())));
+        user.setUpdatedAt(LocalDateTime.now());
+        sysUserMapper.updateById(user);
+
+        afterSale.setStatus(AFTER_SALE_REFUNDED);
+        afterSale.setAuditedAt(LocalDateTime.now());
+        toyAfterSaleMapper.updateById(afterSale);
+
+        order.setStatus(STATUS_REFUNDED);
+        order.setCloseTime(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        toyOrderMapper.updateById(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void rejectAfterSale(Long afterSaleId, String reply) {
+        ToyAfterSale afterSale = toyAfterSaleMapper.selectById(afterSaleId);
+        if (afterSale == null) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后记录不存在");
+        }
+        if (!AFTER_SALE_PENDING_EQUALS(afterSale.getStatus())) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "当前售后状态不可驳回");
+        }
+        ToyOrder order = toyOrderMapper.selectById(afterSale.getOrderId());
+        if (order != null && order.getStatus() != null && order.getStatus() == STATUS_AFTER_SALE) {
+            order.setStatus(STATUS_FINISHED);
+            order.setUpdatedAt(LocalDateTime.now());
+            toyOrderMapper.updateById(order);
+        }
+        afterSale.setStatus(AFTER_SALE_REJECTED);
+        afterSale.setReply(StringUtils.hasText(reply) ? reply.trim() : "管理员驳回售后申请");
+        afterSale.setAuditedAt(LocalDateTime.now());
+        toyAfterSaleMapper.updateById(afterSale);
+    }
+
+    @Override
+    public List<ToyAfterSale> myAfterSales(Long userId) {
+        return toyAfterSaleMapper.selectList(new QueryWrapper<ToyAfterSale>().eq("user_id", userId).orderByDesc("created_at"));
+    }
+
+    @Override
+    public com.toyshop.product.dto.PageResponse<ToyAfterSale> afterSalePage(Integer pageNum, Integer pageSize, Integer status, Long userId, String orderNo) {
+        long current = (pageNum == null || pageNum < 1) ? 1L : pageNum;
+        long size = (pageSize == null || pageSize < 1) ? 10L : pageSize;
+        QueryWrapper<ToyAfterSale> qw = new QueryWrapper<>();
+        if (status != null) qw.eq("status", status);
+        if (userId != null) qw.eq("user_id", userId);
+        if (StringUtils.hasText(orderNo)) qw.like("order_no", orderNo);
+        qw.orderByDesc("created_at");
+        Page<ToyAfterSale> page = toyAfterSaleMapper.selectPage(new Page<>(current, size), qw);
+        return new com.toyshop.product.dto.PageResponse<>(current, size, page.getTotal(), page.getRecords());
     }
 
     @Override
@@ -239,17 +338,14 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单不存在");
         }
-        if (order.getStatus() == null || (order.getStatus() != STATUS_PAID && order.getStatus() != STATUS_SHIPPED)) {
-            throw new BusinessException(ResultCode.BUSINESS_ERROR, "仅已支付或已发货订单可退款");
+        if (order.getStatus() == null || (order.getStatus() != STATUS_PAID && order.getStatus() != STATUS_SHIPPED && order.getStatus() != STATUS_AFTER_SALE)) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "仅已支付、已发货或售后中订单可退款");
         }
-
         rollbackStockAndSaleCount(orderId);
-
         SysUser user = mustActiveUser(order.getUserId());
         user.setBalance(defaultAmount(user.getBalance()).add(defaultAmount(order.getTotalAmount())));
         user.setUpdatedAt(LocalDateTime.now());
         sysUserMapper.updateById(user);
-
         order.setStatus(STATUS_CANCELLED);
         order.setCloseTime(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
@@ -286,6 +382,10 @@ public class OrderServiceImpl implements OrderService {
             product.setUpdatedAt(LocalDateTime.now());
             productMapper.updateById(product);
         }
+    }
+
+    private boolean AFTER_SALE_PENDING_EQUALS(Integer status) {
+        return status != null && status == AFTER_SALE_PENDING;
     }
 
     private ToyOrder buildBaseOrder(Long userId, CreateOrderRequest request, BigDecimal freightAmount) {
