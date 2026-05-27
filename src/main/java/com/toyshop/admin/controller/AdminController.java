@@ -204,19 +204,18 @@ public class AdminController {
 
     @PostMapping("/after-sale/{afterSaleId}/approve")
     public ApiResponse<Void> approveAfterSale(Authentication a,
-                                              @PathVariable Long afterSaleId,
-                                              @RequestBody AuditAfterSaleRequest request) {
+                                              @PathVariable Long afterSaleId) {
         requireAdmin(a);
-        adminService.approveAfterSale(afterSaleId, request == null ? null : request.getReply());
+        orderService.approveAfterSale(afterSaleId);
         return ApiResponse.success();
     }
 
     @PostMapping("/after-sale/{afterSaleId}/reject")
     public ApiResponse<Void> rejectAfterSale(Authentication a,
                                              @PathVariable Long afterSaleId,
-                                             @RequestBody AuditAfterSaleRequest request) {
+                                             @RequestParam(required = false) String reply) {
         requireAdmin(a);
-        adminService.rejectAfterSale(afterSaleId, request == null ? null : request.getReply());
+        orderService.rejectAfterSale(afterSaleId, reply);
         return ApiResponse.success();
     }
 

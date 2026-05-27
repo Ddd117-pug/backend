@@ -196,10 +196,12 @@ public class OrderServiceImpl implements OrderService {
         if (order.getStatus() != STATUS_PENDING_PAY) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "仅待支付订单可取消");
         }
+        System.out.println("[cancel] before update orderId=" + orderId + ", status=" + order.getStatus());
         order.setStatus(STATUS_CANCELLED);
         order.setCloseTime(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         toyOrderMapper.updateById(order);
+        System.out.println("[cancel] after update orderId=" + orderId + ", status=" + order.getStatus());
     }
 
     @Override
@@ -247,6 +249,7 @@ public class OrderServiceImpl implements OrderService {
         if (exists != null) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "该订单已有待审核售后申请");
         }
+        System.out.println("[applyAfterSale] before insert orderId=" + orderId + ", orderStatus=" + order.getStatus());
         ToyAfterSale afterSale = new ToyAfterSale();
         afterSale.setOrderId(orderId);
         afterSale.setUserId(userId);
@@ -254,11 +257,20 @@ public class OrderServiceImpl implements OrderService {
         afterSale.setStatus(AFTER_SALE_PENDING);
         afterSale.setReason(request.getReason().trim());
         afterSale.setCreatedAt(LocalDateTime.now());
-        toyAfterSaleMapper.insert(afterSale);
+        int afterSaleInserted = toyAfterSaleMapper.insert(afterSale);
+        if (afterSaleInserted <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后申请创建失败");
+        }
 
-        order.setStatus(STATUS_AFTER_SALE);
-        order.setUpdatedAt(LocalDateTime.now());
-        toyOrderMapper.updateById(order);
+        ToyOrder orderUpdate = new ToyOrder();
+        orderUpdate.setId(order.getId());
+        orderUpdate.setStatus(STATUS_AFTER_SALE);
+        orderUpdate.setUpdatedAt(LocalDateTime.now());
+        int orderUpdated = toyOrderMapper.updateById(orderUpdate);
+        if (orderUpdated <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单状态更新失败");
+        }
+        System.out.println("[applyAfterSale] after update orderId=" + orderId + ", orderStatus=" + STATUS_AFTER_SALE);
     }
 
     @Override
@@ -268,27 +280,46 @@ public class OrderServiceImpl implements OrderService {
         if (afterSale == null) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后记录不存在");
         }
-        if (!AFTER_SALE_PENDING_EQUALS(afterSale.getStatus())) {
-            throw new BusinessException(ResultCode.BUSINESS_ERROR, "当前售后状态不可审核");
-        }
         ToyOrder order = toyOrderMapper.selectById(afterSale.getOrderId());
         if (order == null) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单不存在");
         }
+
         rollbackStockAndSaleCount(order.getId());
         SysUser user = mustActiveUser(order.getUserId());
         user.setBalance(defaultAmount(user.getBalance()).add(defaultAmount(order.getTotalAmount())));
         user.setUpdatedAt(LocalDateTime.now());
-        sysUserMapper.updateById(user);
+        int userUpdated = sysUserMapper.updateById(user);
+        if (userUpdated <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "用户余额回退失败");
+        }
 
-        afterSale.setStatus(AFTER_SALE_REFUNDED);
-        afterSale.setAuditedAt(LocalDateTime.now());
-        toyAfterSaleMapper.updateById(afterSale);
+        ToyAfterSale update = new ToyAfterSale();
+        update.setId(afterSale.getId());
+        update.setStatus(AFTER_SALE_REFUNDED);
+        update.setAuditedAt(LocalDateTime.now());
+        int afterSaleUpdated = toyAfterSaleMapper.updateById(update);
+        if (afterSaleUpdated <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后状态更新失败");
+        }
+        ToyAfterSale refreshedAfterSale = toyAfterSaleMapper.selectById(afterSale.getId());
+        if (refreshedAfterSale == null || !Integer.valueOf(AFTER_SALE_REFUNDED).equals(refreshedAfterSale.getStatus())) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后状态回读校验失败");
+        }
 
-        order.setStatus(STATUS_REFUNDED);
-        order.setCloseTime(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-        toyOrderMapper.updateById(order);
+        ToyOrder orderUpdate = new ToyOrder();
+        orderUpdate.setId(order.getId());
+        orderUpdate.setStatus(STATUS_REFUNDED);
+        orderUpdate.setCloseTime(LocalDateTime.now());
+        orderUpdate.setUpdatedAt(LocalDateTime.now());
+        int orderUpdated = toyOrderMapper.updateById(orderUpdate);
+        if (orderUpdated <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单状态更新失败");
+        }
+        ToyOrder refreshedOrder = toyOrderMapper.selectById(order.getId());
+        if (refreshedOrder == null || !Integer.valueOf(STATUS_REFUNDED).equals(refreshedOrder.getStatus())) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单状态回读校验失败");
+        }
     }
 
     @Override
@@ -298,19 +329,34 @@ public class OrderServiceImpl implements OrderService {
         if (afterSale == null) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后记录不存在");
         }
-        if (!AFTER_SALE_PENDING_EQUALS(afterSale.getStatus())) {
-            throw new BusinessException(ResultCode.BUSINESS_ERROR, "当前售后状态不可驳回");
-        }
         ToyOrder order = toyOrderMapper.selectById(afterSale.getOrderId());
-        if (order != null && order.getStatus() != null && order.getStatus() == STATUS_AFTER_SALE) {
-            order.setStatus(STATUS_FINISHED);
-            order.setUpdatedAt(LocalDateTime.now());
-            toyOrderMapper.updateById(order);
+        if (order != null) {
+            ToyOrder orderUpdate = new ToyOrder();
+            orderUpdate.setId(order.getId());
+            orderUpdate.setStatus(STATUS_FINISHED);
+            orderUpdate.setUpdatedAt(LocalDateTime.now());
+            int orderUpdated = toyOrderMapper.updateById(orderUpdate);
+            if (orderUpdated <= 0) {
+                throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单状态更新失败");
+            }
+            ToyOrder refreshedOrder = toyOrderMapper.selectById(order.getId());
+            if (refreshedOrder == null || !Integer.valueOf(STATUS_FINISHED).equals(refreshedOrder.getStatus())) {
+                throw new BusinessException(ResultCode.BUSINESS_ERROR, "订单状态回读校验失败");
+            }
         }
-        afterSale.setStatus(AFTER_SALE_REJECTED);
-        afterSale.setReply(StringUtils.hasText(reply) ? reply.trim() : "管理员驳回售后申请");
-        afterSale.setAuditedAt(LocalDateTime.now());
-        toyAfterSaleMapper.updateById(afterSale);
+        ToyAfterSale update = new ToyAfterSale();
+        update.setId(afterSale.getId());
+        update.setStatus(AFTER_SALE_REJECTED);
+        update.setReply(StringUtils.hasText(reply) ? reply.trim() : "管理员驳回售后申请");
+        update.setAuditedAt(LocalDateTime.now());
+        int afterSaleUpdated = toyAfterSaleMapper.updateById(update);
+        if (afterSaleUpdated <= 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后状态更新失败");
+        }
+        ToyAfterSale refreshedAfterSale = toyAfterSaleMapper.selectById(afterSale.getId());
+        if (refreshedAfterSale == null || !Integer.valueOf(AFTER_SALE_REJECTED).equals(refreshedAfterSale.getStatus())) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "售后状态回读校验失败");
+        }
     }
 
     @Override
@@ -328,6 +374,7 @@ public class OrderServiceImpl implements OrderService {
         if (StringUtils.hasText(orderNo)) qw.like("order_no", orderNo);
         qw.orderByDesc("created_at");
         Page<ToyAfterSale> page = toyAfterSaleMapper.selectPage(new Page<>(current, size), qw);
+        System.out.println("[afterSalePage] pageNum=" + current + ", pageSize=" + size + ", total=" + page.getTotal());
         return new com.toyshop.product.dto.PageResponse<>(current, size, page.getTotal(), page.getRecords());
     }
 
@@ -341,6 +388,7 @@ public class OrderServiceImpl implements OrderService {
         if (order.getStatus() == null || (order.getStatus() != STATUS_PAID && order.getStatus() != STATUS_SHIPPED && order.getStatus() != STATUS_AFTER_SALE)) {
             throw new BusinessException(ResultCode.BUSINESS_ERROR, "仅已支付、已发货或售后中订单可退款");
         }
+        System.out.println("[refund] before update orderId=" + orderId + ", status=" + order.getStatus());
         rollbackStockAndSaleCount(orderId);
         SysUser user = mustActiveUser(order.getUserId());
         user.setBalance(defaultAmount(user.getBalance()).add(defaultAmount(order.getTotalAmount())));
@@ -350,6 +398,7 @@ public class OrderServiceImpl implements OrderService {
         order.setCloseTime(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         toyOrderMapper.updateById(order);
+        System.out.println("[refund] after update orderId=" + orderId + ", status=" + order.getStatus());
     }
 
     private ToyOrder mustOwnOrder(Long userId, Long orderId) {
