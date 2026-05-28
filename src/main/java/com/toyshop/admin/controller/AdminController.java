@@ -1,9 +1,5 @@
 package com.toyshop.admin.controller;
 
-import com.toyshop.admin.dto.AdminStatsResponse;
-import com.toyshop.admin.dto.DailyTrendPoint;
-import com.toyshop.aftersale.dto.AdminAfterSaleRow;
-import com.toyshop.aftersale.dto.AuditAfterSaleRequest;
 import com.toyshop.admin.service.AdminService;
 import com.toyshop.common.exception.BusinessException;
 import com.toyshop.common.response.ApiResponse;
@@ -296,18 +292,6 @@ public class AdminController {
         requireAdmin(a);
         reviewService.updateStatus(reviewId, status);
         return ApiResponse.success();
-    }
-
-    @GetMapping("/stats/overview")
-    public ApiResponse<AdminStatsResponse> stats(Authentication a) {
-        requireAdmin(a);
-        return ApiResponse.success(adminService.stats());
-    }
-
-    @GetMapping("/stats/trend7d")
-    public ApiResponse<List<DailyTrendPoint>> trend7d(Authentication a) {
-        requireAdmin(a);
-        return ApiResponse.success(adminService.trend7d());
     }
 
     private void requireAdmin(Authentication authentication) {

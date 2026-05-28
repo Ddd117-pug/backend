@@ -51,17 +51,8 @@ public class Product {
 
     private String size;
 
-    @TableField("is_blind_box")
-    private Integer isBlindBox;
-
-    @TableField("blind_box_info")
-    private String blindBoxInfo;
-
     @TableField("style_desc")
     private String styleDesc;
-
-    @TableField("blind_box_mode")
-    private String blindBoxMode;
 
     private Integer status;
 

@@ -2,7 +2,6 @@ package com.toyshop.admin.service;
 
 import com.toyshop.admin.dto.AdminStatsResponse;
 import com.toyshop.admin.dto.DailyTrendPoint;
-import com.toyshop.aftersale.dto.AdminAfterSaleRow;
 import com.toyshop.order.dto.OrderDetailResponse;
 import com.toyshop.order.entity.ToyOrder;
 import com.toyshop.product.dto.PageResponse;
@@ -41,9 +40,6 @@ public interface AdminService {
     OrderDetailResponse orderDetail(Long orderId);
     void shipOrder(Long orderId);
     void cancelOrder(Long orderId);
-    List<AdminAfterSaleRow> afterSaleList();
-    void approveAfterSale(Long afterSaleId, String reply);
-    void rejectAfterSale(Long afterSaleId, String reply);
     PageResponse<SysUser> userPage(String keyword, Integer status, Integer pageNum, Integer pageSize);
     SysUser userDetail(Long userId);
     void updateUserStatus(Long userId, Integer status);
@@ -51,4 +47,7 @@ public interface AdminService {
     ReviewPageResponse reviewPage(Integer pageNum, Integer pageSize, Long productId, Integer status);
     AdminStatsResponse stats();
     List<DailyTrendPoint> trend7d();
+    java.util.List<com.toyshop.admin.dto.OrderStatusStat> orderStatusStats();
+    java.util.List<com.toyshop.admin.dto.RankItem> brandSalesRank();
+    java.util.List<com.toyshop.admin.dto.RankItem> hotProductRank();
 }

@@ -4,13 +4,11 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DailyTrendPoint {
-    private String date;
-    private long orderCount;
-    private BigDecimal salesAmount;
+public class OrderStatusStat {
+    private Integer status;
+    private String name;
+    private long value;
 }

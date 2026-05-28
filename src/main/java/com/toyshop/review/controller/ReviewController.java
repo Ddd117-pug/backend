@@ -31,7 +31,7 @@ public class ReviewController {
     }
 
     /**
-     * 查询某商品评价（前台）
+     * 查询某商品评价
      */
     @GetMapping("/product/{productId}")
     public ApiResponse<List<ProductReview>> listByProduct(@PathVariable Long productId) {

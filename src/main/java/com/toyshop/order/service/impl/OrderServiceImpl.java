@@ -493,10 +493,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private String normalizeStyleOption(Product product, String styleOption) {
-        if (product == null || product.getIsBlindBox() == null || product.getIsBlindBox() != 1) {
-            return null;
-        }
-        if (!StringUtils.hasText(product.getStyleDesc())) {
+        if (product == null || !StringUtils.hasText(product.getStyleDesc())) {
             return null;
         }
         String[] options = product.getStyleDesc().split("\\r?\\n|；|;");

@@ -9,8 +9,8 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DailyTrendPoint {
-    private String date;
-    private long orderCount;
-    private BigDecimal salesAmount;
+public class RankItem {
+    private Long id;
+    private String name;
+    private BigDecimal value;
 }

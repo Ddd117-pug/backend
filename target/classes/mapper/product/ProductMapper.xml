@@ -20,10 +20,7 @@
         <result property="saleCount" column="sale_count"/>
         <result property="material" column="material"/>
         <result property="size" column="size"/>
-        <result property="isBlindBox" column="is_blind_box"/>
-        <result property="blindBoxInfo" column="blind_box_info"/>
         <result property="styleDesc" column="style_desc"/>
-        <result property="blindBoxMode" column="blind_box_mode"/>
         <result property="status" column="status"/>
         <result property="isHot" column="is_hot"/>
         <result property="isNew" column="is_new"/>
@@ -34,7 +31,7 @@
     <sql id="BaseColumns">
         id, category_id, brand_id, name, sub_title, description, cover_url, banner_urls, detail_image_urls,
         price, original_price, stock, sale_count, material, size,
-        is_blind_box, blind_box_info, style_desc, blind_box_mode, status, is_hot, is_new, created_at, updated_at
+        style_desc, status, is_hot, is_new, created_at, updated_at
     </sql>
 
     <select id="selectPageList" resultMap="ProductResultMap">
