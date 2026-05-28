@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.toyshop.consultation.mapper.ConsultationMessageMapper">
+
+    <resultMap id="MessageResultMap" type="com.toyshop.consultation.entity.ToyConsultationMessage">
+        <id property="id" column="id"/>
+        <result property="consultationId" column="consultation_id"/>
+        <result property="senderType" column="sender_type"/>
+        <result property="senderId" column="sender_id"/>
+        <result property="content" column="content"/>
+        <result property="messageType" column="message_type"/>
+        <result property="isRead" column="is_read"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.toyshop.consultation.entity.ToyConsultationMessage" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO toy_consultation_message
+        (consultation_id, sender_type, sender_id, content, message_type, is_read, created_at)
+        VALUES
+        (#{consultationId}, #{senderType}, #{senderId}, #{content}, #{messageType}, #{isRead}, #{createdAt})
+    </insert>
+
+    <select id="selectByConsultationId" resultMap="MessageResultMap">
+        SELECT id, consultation_id, sender_type, sender_id, content, message_type, is_read, created_at
+        FROM toy_consultation_message
+        WHERE consultation_id = #{consultationId}
+        ORDER BY created_at ASC, id ASC
+    </select>
+</mapper>
